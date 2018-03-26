@@ -16,8 +16,9 @@ def get_batch_data(batch_size, time_steps):
 
     """
     global BATCH_START
-    x = np.arange(BATCH_START, BATCH_START + batch_size * time_steps).reshape([batch_size, time_steps])
+    x = np.arange(BATCH_START, BATCH_START + batch_size * time_steps).reshape([batch_size, time_steps]) / (10 * np.pi)
     seq = np.sin(x)
+    # res = np.sin(x + 1)
     res = np.cos(x)
     BATCH_START += time_steps
     return [seq[:, :, np.newaxis], res[:, :, np.newaxis], x]
@@ -66,12 +67,14 @@ class lstm_model:
         """
         tensorflow的lstm每个batchsize会保存一个最终的finalState，作为下一个batchsize的初始值
         """
-        lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.cell_size, forget_bias = 1.0, state_is_tuple = True)
+        lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.cell_size, state_is_tuple = True)
         #定义最初始的状态值
         with tf.name_scope('intial_state'):
             self.cell_init_state = lstm_cell.zero_state(self.batch_size, dtype = tf.float32)
         cell_outputs, cell_final_state = tf.nn.dynamic_rnn(lstm_cell, input_y,
                             initial_state = self.cell_init_state, time_major = False)
+        print("input_y:", input_y.shape)
+        print("cell_outputs.shape:", cell_outputs.shape)
         return cell_outputs, cell_final_state
 
     def add_output_layer(self, cell_outputs):
@@ -83,8 +86,6 @@ class lstm_model:
         bias_out = self.get_bais(self.output_size)
         with tf.name_scope("wx_plus_b"):
             output_y = tf.matmul(output_x, weight_out) + bias_out
-        # 再将输出层转换为之前的维度
-        output_y = tf.reshape(output_y, [-1, self.n_steps, self.cell_size])
         return output_y
 
 
@@ -150,8 +151,6 @@ class lstm_model:
         writer = tf.summary.FileWriter(Logdir, sess.graph)
         init = tf.global_variables_initializer()
         sess.run(init)
-        plt.ion()
-        plt.show()
         for iter in range(iter_num):
             seq, res, x_range = get_batch_data(self.batch_size, self.n_steps)
             if iter == 0:
@@ -159,11 +158,15 @@ class lstm_model:
             else:
                 feed_dict = {ys : res, xs : seq, self.cell_init_state : state}
             _, cost, state, pred = sess.run([train_op, loss, cell_final_state, output_y], feed_dict = feed_dict)
-            plt.plot(x_range[0, :], res[0].flatten(), 'r', x_range[0, :], pred.flatten()[:self.n_steps], 'b--')
-            plt.ylim((-1.2, 1.2))
-            plt.draw()
-            plt.pause(0.3)
-            if iter % 20 == 0:
+            # print("x:{}   y:{}   pred:{}".format(x_range[0, :], res[0].flatten(), pred.flatten()[:self.n_steps]))
+            # print(x_range.shape, '\n', pred.flatten().shape)
+
+            if iter % 200 == 0:
+                plt.plot(x_range[0, :], res[0].flatten(), 'r', x_range[0, :], pred.flatten()[:self.n_steps], 'b--')
+                plt.ylim((-1.2, 1.2))
+                plt.draw()
+                plt.pause(0.3)
+                plt.show()
                 print('loss:', round(cost, 4))
                 result = sess.run(merged, feed_dict)
                 writer.add_summary(result, iter)
