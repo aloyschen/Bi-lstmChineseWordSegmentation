@@ -8,7 +8,7 @@ if __name__ == "__main__":
     input_size = 1
     output_size = 1
     cell_size = 10
-    lr = 0.0006
+    lr = 0.006
     iter_num = 1000
     model = lstm_model(time_steps, input_size, output_size, cell_size, batch_size)
     model.train(Logdir = './log', iter_num = iter_num)

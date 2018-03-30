@@ -13,12 +13,15 @@ def get_batch_data(batch_size, time_steps):
     获取训练集数据
     Parameters
     ----------
-
+        batch_size: 每个Batch的大小
+        time_steps: 时间序列长度
+    Returns
+    -------
+        返回输入时间序列的x值和对应的y值：[sin(x), cos(x), x]
     """
     global BATCH_START
-    x = np.arange(BATCH_START, BATCH_START + batch_size * time_steps).reshape([batch_size, time_steps]) / (10 * np.pi)
+    x = np.arange(BATCH_START, BATCH_START + batch_size * time_steps).reshape([batch_size, time_steps]) / (1 * np.pi)
     seq = np.sin(x)
-    # res = np.sin(x + 1)
     res = np.cos(x)
     BATCH_START += time_steps
     return [seq[:, :, np.newaxis], res[:, :, np.newaxis], x]
@@ -50,7 +53,13 @@ class lstm_model:
     def add_input_layer(self, xs):
         """
         定义输入层结构，后续连接LSTM隐藏层
-        :return:
+        Parameters
+        ----------
+            xs: 输入数据
+        Returns
+        -------
+            input_x: 输入层的输入变量
+            input_y: 输入层的输出变量
         """
         #首先需要将输入的参数维度转为二维，即【batch_size, time_steps, input_size】-> 【batch_size*time_steps, input_size】
         input_x = tf.reshape(xs, [-1, self.input_size])
@@ -65,14 +74,17 @@ class lstm_model:
 
     def add_LSTM_layer(self, input_y):
         """
-        tensorflow的lstm每个batchsize会保存一个最终的finalState，作为下一个batchsize的初始值
+        tensorflow的lstm每个batchsize会保存一个最终的finalState，
+        作为下一个batchsize的初始值
+        Parameters
+        ----------
+            input_y: lstm层输入值
         """
         lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.cell_size, state_is_tuple = True)
         #定义最初始的状态值
         with tf.name_scope('intial_state'):
             self.cell_init_state = lstm_cell.zero_state(self.batch_size, dtype = tf.float32)
-        cell_outputs, cell_final_state = tf.nn.dynamic_rnn(lstm_cell, input_y,
-                            initial_state = self.cell_init_state, time_major = False)
+        cell_outputs, cell_final_state = tf.nn.dynamic_rnn(lstm_cell, input_y, initial_state = self.cell_init_state, time_major = False)
         print("input_y:", input_y.shape)
         print("cell_outputs.shape:", cell_outputs.shape)
         return cell_outputs, cell_final_state
@@ -80,6 +92,12 @@ class lstm_model:
     def add_output_layer(self, cell_outputs):
         """
         定义输出层的网络结构
+        Parameters
+        ----------
+            cell_outputs: lstm神经元输出值
+        Returns
+        ------
+            output_y: 输出层的输出值
         """
         output_x = tf.reshape(cell_outputs, [-1, self.cell_size])
         weight_out = self.get_weights([self.cell_size, self.output_size])
@@ -92,6 +110,13 @@ class lstm_model:
     def compute_loss(self, output_y, input_y):
         """
         计算模型损失函数
+        Parameters
+        ----------
+            output_y: 模型输出层的输出值
+            input_y: 训练集样本的标签值
+        Returns
+        -------
+            loss: 模型的损失值
         """
         losses = tf.square(tf.subtract(tf.reshape(tf.tanh(output_y), [-1]), tf.reshape(input_y, [-1])))
         #因为求出的losses是所有的cell，要求平均值
@@ -109,6 +134,9 @@ class lstm_model:
         ----------
             shape: 矩阵大小
             name: 名字
+        Returns
+        -------
+            权重矩阵
         """
         initiatizer = tf.random_normal_initializer(mean = 0., stddev = 1.)
         return tf.get_variable(shape = shape, initializer = initiatizer, name = w_name)
@@ -121,6 +149,9 @@ class lstm_model:
         ----------
             shape: 矩阵大小
             name: 名字
+        Returns
+        -------
+            偏置矩阵
         """
         initializer = tf.constant_initializer(0.1)
         return tf.get_variable(shape = shape, initializer = initializer, name = b_name)
@@ -132,6 +163,10 @@ class lstm_model:
     def train(self, Logdir, iter_num):
         """
         定义整个模型结构，并训练LSTM模型
+        Parameters
+        ----------
+            Logdir: Tensorboard日志输出路径
+            iter_num: 迭代次数
         """
         with tf.name_scope("inputs"):
             xs = tf.placeholder(tf.float32, [None, self.n_steps, self.input_size], name = 'xs')
