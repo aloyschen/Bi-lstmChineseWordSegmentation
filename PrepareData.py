@@ -34,10 +34,11 @@ class PreProcessing:
         # 语料中每个字符数量，其中'UNK'表示词汇表外的字符，'STAT'表示句子首字符之前的字符，'END'表示句子尾字符后面的字符，这两字符用于生成字的上下文
         self.count = [['UNK', 0], ['STAT', 0],
                       ['END', 0]]
-        # 字符分割符为双空格
+        # 分割符为双空格
         self.SPLIT_CHAR = '  '
         # 读取语料库中的句子
         self.sentences = self.read_sentence()
+        # word_index存储了每句话中每个字符在字典中的序号
         self.words_index, self.labels_index = [], []
         # 根据是否指定词典路径来初始化词典，若指定，使用给定词典，未指定，根据语料生成
         # 词典中项表示字符编号，从0开始，{'UNK':0,'STAT':1,'END':2,'我':3,'们':4}
@@ -59,7 +60,7 @@ class PreProcessing:
         return sentences
 
 
-    def build_raw_corpus(self):
+    def save_sentence(self):
         """
         保存预处理之后的语料库
         """
@@ -70,7 +71,10 @@ class PreProcessing:
 
     def build_dictionary(self):
         """
-        建立词汇表字典, 首先统计每个字出现的次数，然后取出出现次数最大的前VOCAB_SIZE个字
+        建立词汇表字典,
+        1、首先统计每个字出现的次数
+        2、取出出现次数最大的前VOCAB_SIZE个字符(出现次数排序后)
+        3、获取每个字符对应的index
         """
         dictionary = {}
         words = ''.join(self.sentences).replace(' ', '')
@@ -83,7 +87,7 @@ class PreProcessing:
 
     def read_dictionary(self):
         """
-        读取词汇表字典
+        读取指定的词汇表字典
         """
         with open(self.dict_file, 'r', encoding = 'utf-8') as file:
             dict_content = file.read().splitlines()
@@ -94,10 +98,12 @@ class PreProcessing:
         return dictionary
 
 
-    def build_basic_dataset(self):
+    def build_dataset_features(self):
         """
-
-        :return:
+        建立基础语料库数据集
+        1、获取每行句子中每个字符在字典中对应的index
+        2、若不是字典中的字符，则记录为UNK
+        3、所有语料库的对应index存储到列表word_index
         """
         unk_count = 0
         # 语料库中句子进行标号
@@ -114,9 +120,13 @@ class PreProcessing:
             self.words_index.append(sen_data)
         self.count[0][1] = unk_count
 
-    def build_corpus_dataset(self):
-        """
 
+    def build_dataset_label(self):
+        """
+        根据语料中每个词的长度取每个字符对应的label
+        1、如果是单个字符对应的标签为0
+        2、如果词的长度大于2则根据BME标注，B对应的标签为1, M对应的标签为2，E对应的标签为3
+        3、将每句话的标签存储到word_label中
         """
         empty = 0
         for sentence in self.sentences:
@@ -130,16 +140,20 @@ class PreProcessing:
                 elif l == 1:
                     sentence_label.append(0)
                 else:
-                    sentence_label.append(l)
+                    sentence_label.append(1)
                     sentence_label.extend([2] * (l - 2))
                     sentence_label.append(3)
             self.labels_index.append(sentence_label)
 
-    def buid_test_corpus(self, filename):
+    def save_sentences_label(self, filename):
         """
-
-        :param filename:
-        :return:
+        将语料库中的每个单词和对应的标签保存到文件中
+        Parameters
+        ----------
+            filename: 保存文件的路径
+        Returns
+        -------
+            None
         """
         with open(filename, 'w', encoding = 'utf-8') as file:
             for (sentence, sentence_label) in enumerate(zip(self.sentences, self.labels_index)):
@@ -148,11 +162,12 @@ class PreProcessing:
 
     def build_exec(self):
         """
-
-        :return:
+        对语料库进行处理
+        1、将每行句子中的字符index和对应的label保存到对应的文件中
+        2、如果需要则保存语料库中的每个字符和对应的标签
         """
-        self.build_basic_dataset()
-        self.build_corpus_dataset()
+        self.build_dataset_features()
+        self.build_dataset_label()
         with open(self.output_words_file, 'w+', encoding = 'utf-8') as words_file:
             with open(self.output_labels_file, 'w+', encoding = 'utf-8') as labels_file:
                 for (words, labels) in enumerate(zip(self.words_index, self.labels_index)):
@@ -164,9 +179,9 @@ class PreProcessing:
                         dict_file.write(word + ' ' + str(index) + '\n')
                     dict_file.close()
         if self.output_raw_file:
-            self.build_raw_corpus()
+            self.save_sentence()
 
 if __name__ == "__main__":
-    prepare_pku = PreProcessing(4000, './corpus/pku_training.utf8', './corpus/pku_training_words.txt',
-                            './corpus/pku_training_labels.txt', './corpus/pku_training_dict.txt', 'corpus/pku_training_raw.utf8')
+    prepare_pku = PreProcessing(4000, './data/pku_training.utf8', './data/pku_training_words.txt',
+                            './data/pku_training_labels.txt', './data/pku_training_dict.txt', './data/pku_training_raw.utf8')
     prepare_pku.build_exec()
