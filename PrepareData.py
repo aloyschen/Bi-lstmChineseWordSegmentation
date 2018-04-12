@@ -1,8 +1,8 @@
 import re
 import collections
 import config
+import numpy as np
 from utils import strQ2B
-import tensorflow as tf
 
 
 class reader:
@@ -13,8 +13,6 @@ class reader:
         ----------
             vocab_size: 语料中字符的数量
             input_file: 输入语料的文件路径, 可能是训练集或者测试集
-            output_words_file: 输入语料每个字在词汇表中对应的索引
-            output_labels_file: 标签索引文件中的内容是输入语料中每个字对应的分词标签编号，采用SBIE标签，对应编号为0,1,2,3
             dict_file: 词典文件存储路径
             input_dict: 指定是否输入词典，若为True，则使用dict_file指定的词典，若为False，则根据语料和vocab_size生成词典，并输出至dict_file指定的位置，默认为False
         """
@@ -29,6 +27,17 @@ class reader:
         self.sentences = []
         # word_index存储了每句话中每个字符在字典中的序号
         self.words_index, self.labels_index = [], []
+        # 记录batch的index
+        self.index_in_epoch = 0
+        # 完成了多少次epochs
+        self.epochs_completed = 0
+        # 样本数据量
+        self.sample_nums = 0
+        # 数据集数据处理
+        self.read_words()
+        self.build_vocab()
+        self.word_to_ids()
+        self.word_label()
 
 
     def read_words(self):
@@ -41,6 +50,7 @@ class reader:
             self.sentences = data.splitlines()
             # 去除空行
             self.sentences = list(filter(None, self.sentences))
+            self.sample_nums = len(self.sentences)
             words = data.replace('\n', "").split(self.SPLIT_CHAR)
             self.words = [char for word in words for char in word]
 
@@ -63,6 +73,7 @@ class reader:
             words, _ = list(zip(*count_pairs))
             self.dictionary = dict(zip(words, range(len(words))))
             self.save_dictionary()
+
 
     def word_to_ids(self):
         """
@@ -109,7 +120,6 @@ class reader:
                 self.labels_index.append(sentence_label)
 
 
-
     def save_dictionary(self):
         """
         存储构建的词典
@@ -117,6 +127,7 @@ class reader:
         with open(self.dict_file, 'w+', encoding = 'utf-8') as file:
             for word in self.dictionary.keys():
                 file.write(str(word) + '\t' + str(self.dictionary[word]) + '\n')
+
 
     def read_dictionary(self):
         """
@@ -130,23 +141,38 @@ class reader:
                 dictionary[word[0]] = word[1]
         return dictionary
 
-    def get_batch(self, batch_size, num_steps):
+
+    def get_batch(self, batch_size):
         """
         产生tensorflow所需的数据
         """
-        self.read_words()
-        self.build_vocab()
-        self.word_to_ids()
-        self.word_label()
+        start = self.index_in_epoch
+        num_samples = len(self.words_index)
+        self.words_index = np.asarray(self.words_index)
+        self.labels_index = np.asarray(self.labels_index)
+        if start == 0 and self.epochs_completed == 0:
+            idx = np.arange(0, num_samples)
+            np.random.shuffle(idx)
+            self.words_index = self.words_index[idx]
+            self.labels_index = self.labels_index[idx]
+        if start + batch_size > num_samples:
+            self.epochs_completed += 1
+            # 如果最后一个batch_size不够，还剩下一些数据
+            rest_num_samples = num_samples - start
+            rest_words_index = self.words_index[start:rest_num_samples]
+            rest_label_index = self.labels_index[start:rest_num_samples]
+            idx_new = np.arange(0, num_samples)
+            np.random.shuffle(idx_new)
+            self.words_index = self.words_index[idx_new]
+            self.labels_index = self.labels_index[idx_new]
+            start = 0
+            self.index_in_epoch = batch_size - rest_num_samples
+            end = self.index_in_epoch
+            batch_word_index =  np.concatenate((self.words_index[start:end], rest_words_index), axis = 0)
+            batch_label_index = np.concatenate((self.labels_index[start:end], rest_label_index), axis = 0)
+            return batch_word_index, batch_label_index
 
-        with tf.name_scope("data_producer"):
-            print(len(self.words_index), len(self.labels_index))
-            dataset = tf.data.Dataset.from_sparse_tensor_slices((self.words_index, self.labels_index))
-            with tf.Session() as sess:
-                sess.run(tf.global_variables_initializer())
-                print(sess.run(dataset))
-
-
-if __name__ == "__main__":
-    prepare_pku = reader('./data/pku_training.utf8', './data/pku_training_dict.txt')
-    prepare_pku.get_batch(batch_size = 128, num_steps = 10)
+        else:
+            self.index_in_epoch += batch_size
+            end = self.index_in_epoch
+            return self.words_index[start:end], self.labels_index[start:end]

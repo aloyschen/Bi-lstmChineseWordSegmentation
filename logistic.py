@@ -5,13 +5,13 @@ from sklearn import linear_model
 
 # this is our test set, it's just a straight line with some
 # Gaussian noise
-xmin, xmax = -5, 5
+xmin, xmax = 0, 5
 n_samples = 100
 np.random.seed(0)
 X = np.random.normal(size=n_samples)
-y = (X > 0).astype(np.float)
+y = (X > 1).astype(np.float)
 X[X > 0] *= 4
-X += .3 * np.random.normal(size=n_samples)
+X += .2 * np.random.normal(size=n_samples)
 
 X = X[:, np.newaxis]
 # run the classifier
@@ -40,7 +40,7 @@ plt.xlabel('X')
 plt.xticks(range(-5, 10))
 plt.yticks([0, 0.5, 1])
 plt.ylim(-.25, 1.25)
-plt.xlim(-4, 10)
+plt.xlim(0, 10)
 plt.legend(('Logistic Regression Model', 'Samples'),
            loc="lower right", fontsize='small')
 plt.show()
