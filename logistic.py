@@ -9,7 +9,7 @@ xmin, xmax = 0, 5
 n_samples = 100
 np.random.seed(0)
 X = np.random.normal(size=n_samples)
-y = (X > 1).astype(np.float)
+y = (X > 0).astype(np.float)
 X[X > 0] *= 4
 X += .2 * np.random.normal(size=n_samples)
 

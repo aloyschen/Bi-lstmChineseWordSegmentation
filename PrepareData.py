@@ -48,6 +48,7 @@ class reader:
             # 将所有中文标点符号转换为英文标点符号
             data = strQ2B(file.read())
             self.sentences = data.splitlines()
+            self.sentences = re.split(u'[，。！？、‘’“”]', ''.join(self.sentences))
             # 去除空行
             self.sentences = list(filter(None, self.sentences))
             self.sample_nums = len(self.sentences)
@@ -176,3 +177,5 @@ class reader:
             self.index_in_epoch += batch_size
             end = self.index_in_epoch
             return self.words_index[start:end], self.labels_index[start:end]
+if __name__ == "__main__":
+    data = reader(config.input_file, config.dict_file, config.input_dict)

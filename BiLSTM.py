@@ -35,16 +35,25 @@ def BiLSTM(train_X, train_y):
     with tf.variable_scope("biLSTM"):
         LSTM_fw_cell = LSTM_Cell()
         LSTM_bw_cell = LSTM_Cell()
-        bilstm_output, bilstm_output_state= tf.nn.bidirectional_dynamic_rnn(LSTM_fw_cell, LSTM_bw_cell, inputs, dtype = tf.float32)
-        output = tf.concat([bilstm_output[0], bilstm_output[1]], -1)
-        output = tf.reshape(output, [-1, config.hidden_size*2])
+        cell_fw = rnn.MultiRNNCell([LSTM_Cell() for _ in range(config.layer_num)], state_is_tuple=True)
+        cell_bw = rnn.MultiRNNCell([LSTM_Cell() for _ in range(config.layer_num)], state_is_tuple=True)
+        inputs = tf.unstack(inputs, config.time_step, 1)
+        bilstm_output, _, _ = rnn.static_bidirectional_rnn(cell_fw, cell_bw, inputs = inputs, dtype = tf.float32)
+        output = tf.reshape(bilstm_output, [-1, config.hidden_size*2])
     logits = tf.matmul(output, weights_out) + bais_out
-    y_pred = tf.nn.softmax(logits)
+    # y_pred = tf.nn.softmax(logits)
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels = tf.reshape(train_y, [-1]), logits = logits))
     tf.summary.scalar("loss", loss)
-    optimizer = tf.train.AdagradOptimizer(learning_rate = config.lr)
-    train_op = optimizer.minimize(loss)
-    correct_pred = tf.equal(tf.cast(tf.argmax(y_pred, 1), tf.int32), tf.reshape(train_y, [-1]))
+    # optimizer = tf.train.AdagradOptimizer(learning_rate = config.lr)
+    # train_op = optimizer.minimize(loss)
+    # ***** 优化求解 *******
+    tvars = tf.trainable_variables()  # 获取模型的所有参数
+    grads, _ = tf.clip_by_global_norm(tf.gradients(loss, tvars), config.max_grad_norm)   # 获取损失函数对于每个参数的梯度
+    optimizer = tf.train.AdamOptimizer(learning_rate=config.lr)
+    # 梯度下降计算
+    train_op = optimizer.apply_gradients(zip(grads, tvars),
+                                         global_step=tf.contrib.framework.get_or_create_global_step())
+    correct_pred = tf.equal(tf.cast(tf.argmax(logits, 1), tf.int32), tf.reshape(train_y, [-1]))
     accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
     return train_op, accuracy, loss
 
@@ -53,10 +62,14 @@ def train():
     """
     :return:
     """
+
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
     input_x = tf.placeholder(tf.int32, [None, config.max_sentence_len], name = "input_X")
     input_y = tf.placeholder(tf.int32, [None, config.max_sentence_len], name = "input_y")
     train_op, accuracy, loss = BiLSTM(input_x, input_y)
-    with tf.Session() as sess:
+    saver = tf.train.Saver()  # 最多保存的模型数量
+    with tf.Session(config=config) as sess:
         sess.run(tf.global_variables_initializer())
         data = reader(config.input_file, config.dict_file, config.input_dict)
         for epoch in range(config.epochs):
@@ -65,7 +78,9 @@ def train():
                 feed_dict = {input_x : batch_X, input_y : batch_y}
                 _, batch_accuracy, batch_loss = sess.run([train_op, accuracy, loss], feed_dict = feed_dict)
                 if batch % 100 == 0:
-                    print("Epoch: {} iter_num: {} loss: {} batch_accuracy: {}".format(epoch, batch, batch_loss, batch_accuracy))
+                    print("Epoch: {} iter_num: {} training loss: {} batch_accuracy: {}".format(epoch, batch, batch_loss, batch_accuracy))
+            if (epoch + 1) % 3 == 0:  # 每 3 个 epoch 保存一次模型
+                saver.save(sess, config.model_save_path, global_step=(epoch + 1))
 
 if __name__ == "__main__":
     train()
