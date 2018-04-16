@@ -63,13 +63,13 @@ def train():
     :return:
     """
 
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
+    gpu_config = tf.ConfigProto()
+    gpu_config.gpu_options.allow_growth = True
     input_x = tf.placeholder(tf.int32, [None, config.max_sentence_len], name = "input_X")
     input_y = tf.placeholder(tf.int32, [None, config.max_sentence_len], name = "input_y")
     train_op, accuracy, loss = BiLSTM(input_x, input_y)
     saver = tf.train.Saver()  # 最多保存的模型数量
-    with tf.Session(config=config) as sess:
+    with tf.Session(config=gpu_config) as sess:
         sess.run(tf.global_variables_initializer())
         data = reader(config.input_file, config.dict_file, config.input_dict)
         for epoch in range(config.epochs):
