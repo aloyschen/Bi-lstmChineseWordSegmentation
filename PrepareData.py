@@ -48,7 +48,8 @@ class reader:
             # 将所有中文标点符号转换为英文标点符号
             data = strQ2B(file.read())
             self.sentences = data.splitlines()
-            self.sentences = re.split(u'[，。！？、‘’“”]', ''.join(self.sentences))
+            if config.train == True:
+                self.sentences = re.split(u'[，。！？、‘’“”]', ''.join(self.sentences))
             # 去除空行
             self.sentences = list(filter(None, self.sentences))
             self.sample_nums = len(self.sentences)
@@ -72,7 +73,7 @@ class reader:
             counter = collections.Counter(self.words)
             count_pairs = sorted(counter.items(), key = lambda x : -x[1])
             words, _ = list(zip(*count_pairs))
-            self.dictionary = dict(zip(words, range(len(words))))
+            self.dictionary = dict(zip(words, range(1, len(words))))
             self.save_dictionary()
 
 
@@ -82,9 +83,12 @@ class reader:
             1、需要进行padding处理，如果句子字符长度超过max则舍弃
             2、如果句子字符长度小于max则补0
         """
+        sentence_length = []
         for sentence in self.sentences:
             tmp = []
             sentence.replace(self.SPLIT_CHAR, '')
+            if len(sentence) > 0:
+                sentence_length.append(len(sentence))
             for word in sentence:
                 if word in self.dictionary:
                     tmp.append(self.dictionary[word])
@@ -93,6 +97,7 @@ class reader:
             else:
                 tmp.extend([0] * (config.max_sentence_len - len(tmp)))
                 self.words_index.append(tmp)
+        print(collections.Counter(sentence_length).most_common(20))
 
 
     def word_label(self):
@@ -109,11 +114,11 @@ class reader:
                 if l == 0:
                     continue
                 elif l == 1:
-                    sentence_label.append(0)
-                else:
                     sentence_label.append(1)
-                    sentence_label.extend([2] * (l - 2))
-                    sentence_label.append(3)
+                else:
+                    sentence_label.append(2)
+                    sentence_label.extend([3] * (l - 2))
+                    sentence_label.append(4)
             if len(sentence_label) >= config.max_sentence_len:
                 self.labels_index.append(sentence_label[:config.max_sentence_len])
             else:
@@ -142,10 +147,38 @@ class reader:
                 dictionary[word[0]] = word[1]
         return dictionary
 
+    def index_str(self, word_index, labels=None):
+        """
+        将输入的每个字符的index转换为对应的汉字
+        把对应的label也转换为"BMSE"
+        Parameters
+        ----------
+            word_index: 每个字符的index
+            label: 每个字符对应的标签
+        """
+        label_dict = {1 : 'S', 2 : 'B', 3 : 'M', 4 : 'E'}
+        word_str = []
+        label_str = []
+        # 将padding加入的0元素删除
+        word_index = [element for element in word_index if element != 0]
+        for word in word_index:
+            word_str.append(list(self.dictionary.keys())[list(self.dictionary.values()).index(word)])
+        if labels != None:
+            labels = [element for element in labels if element != 0]
+            for label in labels:
+                label_str.append(label_dict[label])
+            result = [word_str_per + '/' + label_str_per for word_str_per, label_str_per in zip(word_str, label_str)]
+            print(' '.join(result))
+        else:
+            print(' '.join(word_str))
+
 
     def get_batch(self, batch_size):
         """
-        产生tensorflow所需的数据
+        产生tensorflow训练和预测所需的数据
+        Parameters
+        ----------
+            batch_size: 训练或者预测时batch的大小
         """
         start = self.index_in_epoch
         num_samples = len(self.words_index)
@@ -177,5 +210,5 @@ class reader:
             self.index_in_epoch += batch_size
             end = self.index_in_epoch
             return self.words_index[start:end], self.labels_index[start:end]
-if __name__ == "__main__":
-    data = reader(config.input_file, config.dict_file, config.input_dict)
+if __name__ == '__main__':
+    data = reader(config.train_file, config.dict_file, False)
