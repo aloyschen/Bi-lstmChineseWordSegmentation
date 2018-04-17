@@ -1,5 +1,5 @@
 """
-Introduction: 构建双向LSTM模型进行中文分词
+Introduction: 构建BiLSTM + CRF 模型进行中文分词
 Author: gaochen3
 Date: 2018.04.10
 """
@@ -30,11 +30,14 @@ def BiLSTM(train_X, train_y):
     构建分词模型
     输入层: train_X [batch_size, time_step]
            embedding [batch_size, time_step, embedding_size]
-    BI-LSTM: 多层LSTM构成
+    BI-LSTM: 多层LSTM构成, 采用动态序列长度
              input: [batch_size, input_size]
-             output: (outputs, output_state_fw, output_state_bw)
+             output: (outputs, output_state)
     """
     with tf.variable_scope("inputs"):
+        # 求出batch_size中每个序列的长度, seq_length: [batch_size]
+        seq_length = tf.reduce_sum(tf.sign(train_X), 1)
+        seq_length = tf.cast(seq_length, tf.int32)
         embedding = tf.Variable(tf.random_normal([config.vocab_size, config.embedding_size]), dtype = tf.float32)
         weights_out = tf.Variable(tf.random_normal([2 * config.hidden_size, config.class_num]))
         bais_out = tf.Variable(tf.random_normal([config.class_num]))
@@ -42,16 +45,23 @@ def BiLSTM(train_X, train_y):
     with tf.variable_scope("biLSTM"):
         cell_fw = rnn.MultiRNNCell([LSTM_Cell() for _ in range(config.layer_num)], state_is_tuple=True)
         cell_bw = rnn.MultiRNNCell([LSTM_Cell() for _ in range(config.layer_num)], state_is_tuple=True)
-        # 因为rnn.static_bidirectional_rnn输入为一个List，因此将输入拆成一个列表，列表中每个元素为一个时间点的[batch_size, embedding_size]
-        inputs = tf.unstack(inputs, config.time_step, 1)
-        bilstm_output, _, _ = rnn.static_bidirectional_rnn(cell_fw, cell_bw, inputs = inputs, dtype = tf.float32)
-        output = tf.reshape(tf.stack(bilstm_output, axis=1), [-1, config.hidden_size*2])
+        bilstm_output, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, inputs = inputs, sequence_length = seq_length, dtype = tf.float32)
+        output = tf.reshape(tf.concat(bilstm_output, 2), [-1, config.hidden_size*2])
     logits = tf.matmul(output, weights_out) + bais_out
-    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels = tf.reshape(train_y, [-1]), logits = logits))
+    # CRF模型
+    scores = tf.reshape(logits, [-1, config.max_sentence_len, config.class_num])
+    log_likelihood, transition_params = tf.contrib.crf.crf_log_likelihood(scores, train_y, seq_length)
+    loss = tf.reduce_mean(-log_likelihood)
+    # 如果使用softmax则需要对loss做mask
+    # losses = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels = tf.reshape(train_y, [-1]), logits = scores))
+    # mask = tf.sequence_mask(seq_length)
+    # losses = tf.boolean_mask(losses, mask
+    # loss = tf.reduce_mean(losses)
     tf.summary.scalar("loss", loss)
     train_op = tf.train.AdamOptimizer(config.lr).minimize(loss)
     correct_pred = tf.equal(tf.cast(tf.argmax(logits, 1), tf.int32), tf.reshape(train_y, [-1]))
     accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+    tf.summary.scalar("accuracy", accuracy)
     return train_op, accuracy, loss
 
 
@@ -67,13 +77,15 @@ def main():
     saver = tf.train.Saver()
     with tf.Session(config=gpu_config) as sess:
         sess.run(tf.global_variables_initializer())
+        merged = tf.summary.merge_all()
+        writer = tf.summary.FileWriter(config.log_dir, sess.graph)
         if config.train == True:
             data = reader(config.train_file, config.dict_file, False)
             for epoch in range(config.epochs):
                 for batch in range(data.sample_nums // config.batch_size):
                     batch_X, batch_y = data.get_batch(config.batch_size)
                     feed_dict = {input_x : batch_X, input_y : batch_y}
-                    _, batch_accuracy, batch_loss = sess.run([train_op, accuracy, loss], feed_dict = feed_dict)
+                    _, batch_accuracy, batch_loss  = sess.run([train_op, accuracy, loss], feed_dict = feed_dict)
                     if batch % 100 == 0:
                         print("Epoch: {} iter_num: {} training loss: {} batch_accuracy: {}".format(epoch, batch, batch_loss, batch_accuracy))
                 # 每 3 个 epoch 保存一次模型

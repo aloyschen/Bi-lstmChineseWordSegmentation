@@ -11,7 +11,7 @@ Date
 """
 
 # 模型参数设置
-epochs = 100
+epochs = 1
 batch_size = 64
 # 语料库标注类别数
 class_num = 5
@@ -29,7 +29,7 @@ embedding_size = 64
 # Droupout保留概率
 keep_prob = 0.5
 # 学习率
-lr = 0.001
+lr = 0.01
 max_grad_norm = 5
 # 句子字符最大程度
 max_sentence_len = 32
@@ -47,3 +47,5 @@ model_ckpt = './model/'
 GPU=0
 # 使用模型训练或者预测
 train=True
+# log输出路径
+log_dir='./log'
