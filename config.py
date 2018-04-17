@@ -22,7 +22,8 @@ hidden_size = 64
 # 句子padding最大长度
 time_step = 32
 # 语料库中字符数量
-vocab_size = 4686
+# vocab_size = 4686
+vocab_size = 5152
 # embedding向量维度
 embedding_size = 64
 # Droupout保留概率

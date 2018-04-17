@@ -2,7 +2,6 @@ import re
 import collections
 import config
 import numpy as np
-from utils import strQ2B
 
 
 class reader:
@@ -46,7 +45,7 @@ class reader:
         """
         with open(self.input_file, 'r', encoding = 'utf-8') as file:
             # 将所有中文标点符号转换为英文标点符号
-            data = strQ2B(file.read())
+            data = file.read()
             self.sentences = data.splitlines()
             if config.train == True:
                 self.sentences = re.split(u'[，。！？、‘’“”]', ''.join(self.sentences))
@@ -83,12 +82,9 @@ class reader:
             1、需要进行padding处理，如果句子字符长度超过max则舍弃
             2、如果句子字符长度小于max则补0
         """
-        sentence_length = []
         for sentence in self.sentences:
             tmp = []
             sentence.replace(self.SPLIT_CHAR, '')
-            if len(sentence) > 0:
-                sentence_length.append(len(sentence))
             for word in sentence:
                 if word in self.dictionary:
                     tmp.append(self.dictionary[word])
@@ -97,7 +93,6 @@ class reader:
             else:
                 tmp.extend([0] * (config.max_sentence_len - len(tmp)))
                 self.words_index.append(tmp)
-        print(collections.Counter(sentence_length).most_common(20))
 
 
     def word_label(self):
