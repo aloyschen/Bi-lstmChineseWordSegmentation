@@ -12,7 +12,10 @@ Date
 
 # 模型参数设置
 epochs = 1
-batch_size = 64
+# 训练集batch
+train_batch_size = 64
+# 测试集batch
+test_batch_size = 128
 # 语料库标注类别数
 class_num = 5
 # 隐藏藏层数
@@ -49,3 +52,11 @@ GPU=0
 train=True
 # log输出路径
 log_dir='./log'
+# 迭代多少次打印一次loss等
+per_print = 100
+# 迭代多少次加入一次tensorBoard的Summary
+per_summary = 10
+# 迭代多少epoch保存模型
+per_save = 2
+# 迭代多少epoch用测试集验证
+per_test = 5
