@@ -47,13 +47,15 @@ class reader:
             # 将所有中文标点符号转换为英文标点符号
             data = file.read()
             self.sentences = data.splitlines()
-            if config.train == True:
-                self.sentences = re.split(u'[，。！？、‘’“”]', ''.join(self.sentences))
             # 去除空行
             self.sentences = list(filter(None, self.sentences))
+            # 根据标点符号对长句子进行切分
+            self.sentences = re.split(u'[。，？；！]', ''.join(self.sentences))
+            self.sentences = [sentence.strip() for sentence in self.sentences]
             self.sample_nums = len(self.sentences)
             words = data.replace('\n', "").split(self.SPLIT_CHAR)
-            self.words = [char for word in words for char in word]
+            words = [word.strip() for word in words]
+            self.words = [char for word in words for char in word ]
 
 
 
@@ -207,3 +209,6 @@ class reader:
             return self.words_index[start:end], self.labels_index[start:end]
 if __name__ == '__main__':
     data = reader(config.train_file, config.dict_file, False)
+    print(data.sentences[0])
+    print(data.words_index[0], len(data.words_index[0]))
+    print(data.labels_index[0], len(data.labels_index[0]))

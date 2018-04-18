@@ -1,0 +1,6 @@
+model_checkpoint_path: "BiLSTM_CRF_128.ckpt-17"
+all_model_checkpoint_paths: "BiLSTM_CRF_128.ckpt-5"
+all_model_checkpoint_paths: "BiLSTM_CRF_128.ckpt-8"
+all_model_checkpoint_paths: "BiLSTM_CRF_128.ckpt-11"
+all_model_checkpoint_paths: "BiLSTM_CRF_128.ckpt-14"
+all_model_checkpoint_paths: "BiLSTM_CRF_128.ckpt-17"

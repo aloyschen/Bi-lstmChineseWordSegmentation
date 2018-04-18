@@ -1,15 +1,17 @@
 import numpy as np
 import tensorflow as tf
+import matplotlib.image as img
+import matplotlib.pyplot as plt
 
 t1 = tf.Variable(tf.random_normal([2,3]))
 t3 = tf.reduce_sum(t1, 1)
 # t2 = tf.concat([t1, t3], -1)
 embedding = tf.get_variable("name", [3, 1], dtype = np.int32)
-with tf.Session() as sess:
-    sess.run(tf.global_variables_initializer())
-# sess.run(tf.global_variables_initializer())
-    print(sess.run(t1))
-    print(sess.run(t3))
+# with tf.Session() as sess:
+#     sess.run(tf.global_variables_initializer())
+# # sess.run(tf.global_variables_initializer())
+#     print(sess.run(t1))
+#     print(sess.run(t3))
     # print(sess.run(tf.stack(t3, axis = 1)))
     # print(sess.run(t2))
 # with open('./data/pku_training.utf8', encoding = 'utf-8') as file:
@@ -36,3 +38,18 @@ with tf.Session() as sess:
 #         file.write(result)
 #     print(result)
 
+image = img.imread('./test1.jpg')
+with tf.Session() as sess:
+    shape = tf.shape(image).eval()
+    h = shape[0]
+    w = shape[1]
+    standardization_image = tf.image.per_image_standardization(image)
+    fig = plt.figure()
+    ax = fig.add_subplot(311)
+    ax.imshow(image)
+    ax = fig.add_subplot(312)
+    ax.hist(sess.run(tf.reshape(image, [h * w, -1])))
+    ax = fig.add_subplot(313)
+    ax.hist(sess.run(tf.reshape(standardization_image,[h*w,-1])))
+    plt.show()
+# ax_std.imshow(standardization_image)
