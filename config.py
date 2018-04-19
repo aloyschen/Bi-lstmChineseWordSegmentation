@@ -23,10 +23,10 @@ layer_num = 2
 # 隐藏层神经元数
 hidden_size = 64
 # 句子padding最大长度
-time_step = 32
+time_step = 64
 # 语料库中字符数量
-# vocab_size = 4686
-vocab_size = 5152
+vocab_size = 4686
+# vocab_size = 5152
 # embedding向量维度
 embedding_size = 64
 # Droupout保留概率
@@ -35,7 +35,7 @@ keep_prob = 0.5
 lr = 0.01
 max_grad_norm = 5
 # 句子字符最大程度
-max_sentence_len = 32
+max_sentence_len = 64
 # 训练数据集的文件路径
 train_file = './data/pku_training.utf8'
 # 测试数据集的文件路径

@@ -47,11 +47,9 @@ class reader:
             # 将所有中文标点符号转换为英文标点符号
             data = file.read()
             self.sentences = data.splitlines()
-            # 去除空行
-            self.sentences = list(filter(None, self.sentences))
             # 根据标点符号对长句子进行切分
             self.sentences = re.split(u'[。，？；！]', ''.join(self.sentences))
-            self.sentences = [sentence.strip() for sentence in self.sentences]
+            self.sentences = [sentence.strip() for sentence in self.sentences if len(sentence) >= 3]
             self.sample_nums = len(self.sentences)
             words = data.replace('\n', "").split(self.SPLIT_CHAR)
             words = [word.strip() for word in words]
