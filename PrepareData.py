@@ -2,7 +2,7 @@ import re
 import collections
 import config
 import numpy as np
-
+from utils import strQ2B
 
 class reader:
     def __init__(self, input_file, dict_file, input_dict=False):
@@ -45,7 +45,7 @@ class reader:
         """
         with open(self.input_file, 'r', encoding = 'utf-8') as file:
             # 将所有中文标点符号转换为英文标点符号
-            data = file.read()
+            data = strQ2B(file.read())
             self.sentences = data.splitlines()
             # 根据标点符号对长句子进行切分
             self.sentences = re.split(u'[。，？；！]', ''.join(self.sentences))
@@ -84,7 +84,7 @@ class reader:
         """
         for sentence in self.sentences:
             tmp = []
-            sentence.replace(self.SPLIT_CHAR, '')
+            sentence = sentence.replace(self.SPLIT_CHAR, '')
             for word in sentence:
                 if word in self.dictionary:
                     tmp.append(self.dictionary[word])
@@ -157,7 +157,10 @@ class reader:
         # 将padding加入的0元素删除
         word_index = [element for element in word_index if element != 0]
         for word in word_index:
-            word_str.append(list(self.dictionary.keys())[list(self.dictionary.values()).index(word)])
+            if word in self.dictionary.keys():
+                word_str.append(list(self.dictionary.keys())[list(self.dictionary.values()).index(word)])
+            else:
+                print("Don't have this word")
         if labels != None:
             labels = [element for element in labels if element != 0]
             for label in labels:

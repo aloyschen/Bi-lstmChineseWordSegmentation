@@ -49,7 +49,7 @@ model_ckpt = './model/'
 # 使用GPU的型号
 GPU=0
 # 使用模型训练或者预测
-train=True
+train=False
 # log输出路径
 log_dir='./log'
 # 迭代多少次打印一次loss等

@@ -172,6 +172,7 @@ def train():
                 # saver.restore(sess, ckpt.model_checkpoint_path)
             test_data = reader(config.test_file, config.dict_file, True)
             test_X, _ = test_data.get_batch(2)
+            print(test_X)
             for word in test_X:
                 test_data.index_str(word)
 
