@@ -58,9 +58,11 @@ class BiLSTM_CRF:
         test_y = np.asarray(self.test_data.labels_index, dtype = np.int32)
 
         train_dataSet = tf.data.Dataset.from_tensor_slices((train_X, train_y))
+        train_dataSet.shuffle(10000)
         train_dataSet = train_dataSet.batch(config.train_batch_size)
 
         test_dataSet = tf.data.Dataset.from_tensor_slices((test_X, test_y))
+        test_dataSet.shuffle(10000)
         test_dataSet = test_dataSet.batch(config.test_batch_size)
 
         self.Iterrator = tf.data.Iterator.from_structure(train_dataSet.output_types, train_dataSet.output_shapes)
@@ -144,7 +146,7 @@ def train():
                     if train_batch % config.per_summary == 0:
                         writer.add_summary(summary, epoch * (train_num // config.train_batch_size) + train_batch)
                     if train_batch % config.per_print == 0:
-                        print("Epoch: {} Global Step: {} training loss: {} batch_accuracy: {0:.2f}%".format(epoch, gStep, batch_loss, accuracy))
+                        print("Epoch: {} Global Step: {} training loss: {} batch_accuracy: {:.2f}%".format(epoch, gStep, batch_loss, accuracy))
                 if epoch % config.per_test == 0:
                     sess.run(model.test_Initializer)
                     for test_batch in range(test_num // config.test_batch_size):
@@ -158,7 +160,7 @@ def train():
                             total_labels += length
                         accuracy = 100.0 * correct_labels / float(total_labels)
                         if test_batch % config.per_print == 0:
-                            print("Test Accuracy: {} step: {}".format(sess.run(accuracy, feed_dict = {model.keep_prob : config.keep_prob}), test_batch))
+                            print("Test Accuracy: {:.2f}% step: {}".format(accuracy, test_batch))
                 # 每 3 个 epoch 保存一次模型
                 if epoch % config.per_save == 0:
                     saver.save(sess, config.model_save_path, global_step = model.gStep)
