@@ -32,18 +32,20 @@ embedding_size = 64
 # Droupout保留概率
 keep_prob = 0.5
 # 学习率
-lr = 0.01
+lr = 0.001
 max_grad_norm = 5
 # 句子字符最大程度
 max_sentence_len = 64
 # 训练数据集的文件路径
 train_file = './data/pku_training.utf8'
 # 测试数据集的文件路径
-test_file = './data/pku_test.utf8'
+test_file = './data/pku_test_gold.utf8'
+# 验证模型预测效果数据
+predict_file = './data/pku_test.utf8'
 # 词典输出文件
 dict_file = './data/pku_training_dict.txt'
 # 模型保存路径
-model_save_path = './model/BiLSTM.ckpt'
+model_save_path = './model_best/BiLSTM.ckpt'
 # 模型的ckpt文件路径
 model_ckpt = './model/'
 # 使用GPU的型号

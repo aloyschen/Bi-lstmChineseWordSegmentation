@@ -5,7 +5,7 @@ import numpy as np
 from utils import strQ2B
 
 class reader:
-    def __init__(self, input_file, dict_file, input_dict=False):
+    def __init__(self,  dict_file, input_file = '', input_dict=False):
         """
         构造函数
         Parameters
@@ -32,11 +32,7 @@ class reader:
         self.epochs_completed = 0
         # 样本数据量
         self.sample_nums = 0
-        # 数据集数据处理
-        self.read_words()
-        self.build_vocab()
-        self.word_to_ids()
-        self.word_label()
+
 
 
     def read_words(self):
@@ -86,8 +82,10 @@ class reader:
             tmp = []
             sentence = sentence.replace(self.SPLIT_CHAR, '')
             for word in sentence:
-                if word in self.dictionary:
+                if word in self.dictionary.keys():
                     tmp.append(self.dictionary[word])
+                else:
+                    tmp.append(0)
             if len(tmp) >= config.max_sentence_len:
                 self.words_index.append(tmp[:config.max_sentence_len])
             else:
@@ -139,7 +137,7 @@ class reader:
             dictionary = {}
             dict_arr = [item.split('\t') for item in dict_content]
             for word in dict_arr:
-                dictionary[word[0]] = word[1]
+                dictionary[word[0]] = int(word[1])
         return dictionary
 
     def index_str(self, word_index, labels=None):
@@ -155,9 +153,9 @@ class reader:
         word_str = []
         label_str = []
         # 将padding加入的0元素删除
-        word_index = [element for element in word_index if element != 0]
+        word_index = [element for element in word_index if int(element) != 0]
         for word in word_index:
-            if word in self.dictionary.keys():
+            if word in self.dictionary.values():
                 word_str.append(list(self.dictionary.keys())[list(self.dictionary.values()).index(word)])
             else:
                 print("Don't have this word")
@@ -208,8 +206,38 @@ class reader:
             self.index_in_epoch += batch_size
             end = self.index_in_epoch
             return self.words_index[start:end], self.labels_index[start:end]
-if __name__ == '__main__':
-    data = reader(config.train_file, config.dict_file, False)
-    print(data.sentences[0])
-    print(data.words_index[0], len(data.words_index[0]))
-    print(data.labels_index[0], len(data.labels_index[0]))
+
+
+    def sentenceTowordIndex(self, sentences):
+        """
+        将需要预测的句子通过标点符号分割之后，将每个字转换为对应的wordIndex
+        Parameters
+        """
+        wordIndex = []
+        sentences = re.split(u'[。，？；！]', sentences)
+        sentences = [element.strip() for element in sentences]
+        self.build_vocab()
+        for sentence in sentences:
+            tmp = []
+            for word in sentence:
+                if word in self.dictionary.keys():
+                    tmp.append(self.dictionary[word])
+                else:
+                    tmp.append(0)
+            if len(tmp) >= config.max_sentence_len:
+                wordIndex.append(tmp[:config.max_sentence_len])
+            else:
+                tmp.extend([0] * (config.max_sentence_len - len(tmp)))
+                wordIndex.append(tmp)
+        return wordIndex
+
+    def load_data(self):
+        """
+        读取数据进行处理
+        """
+        # 数据集数据处理
+        self.read_words()
+        self.build_vocab()
+        self.word_to_ids()
+        self.word_label()
+

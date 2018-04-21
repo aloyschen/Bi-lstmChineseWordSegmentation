@@ -20,8 +20,10 @@ class BiLSTM_CRF:
         self.gStep = 0
         self.gpu_config = tf.ConfigProto()
         self.gpu_config.gpu_options.allow_growth = False
-        self.train_data = reader(config.train_file, config.dict_file, False)
-        self.test_data = reader(config.test_file, config.dict_file, True)
+        self.train_data = reader(input_file = config.train_file, dict_file = config.dict_file, input_dict = False)
+        self.test_data = reader(input_file = config.test_file, dict_file = config.dict_file, input_dict = True)
+        self.input_y = tf.placeholder(dtype = tf.int32, shape = [None, None], name = 'label')
+        self.input_X = tf.placeholder(dtype = tf.int32, shape = [None, None])
 
     def weight_variable(self, shape):
         """
@@ -50,7 +52,8 @@ class BiLSTM_CRF:
         """
         加载数据, 返回训练集和测试集数据的迭代器
         """
-
+        self.train_data.load_data()
+        self.test_data.load_data()
         train_X = np.asarray(self.train_data.words_index, dtype = np.int32)
         train_y = np.asarray(self.train_data.labels_index, dtype = np.int32)
 
@@ -70,7 +73,7 @@ class BiLSTM_CRF:
         self.train_Initializer = self.Iterrator.make_initializer(train_dataSet)
         self.test_Initializer = self.Iterrator.make_initializer(test_dataSet)
 
-    def Build_model(self, input_X, input_y):
+    def Build_model(self):
         """
         构建分词模型
         输入层: input_X [batch_size, time_step]
@@ -81,12 +84,12 @@ class BiLSTM_CRF:
         """
         with tf.variable_scope("inputs"):
             # 求出batch_size中每个序列的长度, seq_length: [batch_size]
-            seq_length = tf.reduce_sum(tf.sign(input_X), 1)
+            seq_length = tf.reduce_sum(tf.sign(self.input_X), 1)
             seq_length = tf.cast(seq_length, tf.int32)
             embedding = tf.Variable(tf.random_normal([config.vocab_size, config.embedding_size]), dtype = tf.float32)
             weights_out = tf.Variable(tf.random_normal([2 * config.hidden_size, config.class_num]))
             bais_out = tf.Variable(tf.random_normal([config.class_num]))
-            inputs = tf.nn.embedding_lookup(embedding, input_X)
+            inputs = tf.nn.embedding_lookup(embedding, self.input_X)
         with tf.variable_scope("biLSTM"):
             cell_fw = rnn.MultiRNNCell([self.LSTM_Cell() for _ in range(config.layer_num)], state_is_tuple=True)
             cell_bw = rnn.MultiRNNCell([self.LSTM_Cell() for _ in range(config.layer_num)], state_is_tuple=True)
@@ -95,7 +98,7 @@ class BiLSTM_CRF:
         logits = tf.matmul(output, weights_out) + bais_out
         # CRF模型
         scores = tf.reshape(logits, [-1, config.time_step, config.class_num])
-        log_likelihood, transition_params = tf.contrib.crf.crf_log_likelihood(scores, input_y, seq_length)
+        log_likelihood, transition_params = tf.contrib.crf.crf_log_likelihood(scores, self.input_y, seq_length)
         self.loss = tf.reduce_mean(-log_likelihood)
         # 如果使用softmax则需要对loss做mask
         # losses = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels = tf.reshape(train_y, [-1]), logits = scores))
@@ -119,63 +122,87 @@ def train():
     """
 
     model = BiLSTM_CRF()
+    model.load_data()
     train_num = model.train_data.sample_nums
     test_num = model.test_data.sample_nums
-    model.load_data()
-    input_X, input_y = model.Iterrator.get_next()
-    seq_len, scores, transition_params = model.Build_model(input_X, input_y)
+    print(train_num)
+    model.input_X, model.input_y = model.Iterrator.get_next()
+    seq_len, scores, transition_params = model.Build_model()
     saver = tf.train.Saver()
     with tf.Session(config = model.gpu_config) as sess:
         sess.run(tf.global_variables_initializer())
         merged = tf.summary.merge_all()
         writer = tf.summary.FileWriter(config.log_dir, sess.graph)
-        if config.train == True:
-            for epoch in range(config.epochs):
-                tf.train.global_step(sess, global_step_tensor = model.global_step)
-                sess.run(model.train_Initializer)
-                for train_batch in range(train_num // config.train_batch_size):
+        for epoch in range(config.epochs):
+            tf.train.global_step(sess, global_step_tensor = model.global_step)
+            sess.run(model.train_Initializer)
+            for train_batch in range(train_num // config.train_batch_size):
+                correct_labels = 0
+                total_labels = 0
+                _, y, batch_loss, summary, gStep, seq_length, all_score, transition = sess.run([model.train_op, model.input_y, model.loss, merged, model.global_step, seq_len, scores, transition_params], feed_dict = {model.keep_prob : config.keep_prob})
+                for (score, length, y_) in zip(all_score, seq_length, y):
+                    y_ = y_[:length]
+                    viterbi_sequence, viterbi_score = tf.contrib.crf.viterbi_decode(score[:length], transition)
+                    correct_labels += np.sum(np.equal(viterbi_sequence, y_))
+                    total_labels += length
+                accuracy = 100.0 * correct_labels / float(total_labels)
+                if train_batch % config.per_summary == 0:
+                    writer.add_summary(summary, epoch * (train_num // config.train_batch_size) + train_batch)
+                if train_batch % config.per_print == 0:
+                    print("Epoch: {} Global Step: {} training loss: {} batch_accuracy: {:.2f}%".format(epoch, gStep, batch_loss, accuracy))
+            if epoch % config.per_test == 0:
+                sess.run(model.test_Initializer)
+                for test_batch in range(test_num // config.test_batch_size):
                     correct_labels = 0
                     total_labels = 0
-                    _, y, batch_loss, summary, gStep, seq_length, all_score, transition = sess.run([model.train_op, input_y, model.loss, merged, model.global_step, seq_len, scores, transition_params], feed_dict = {model.keep_prob : config.keep_prob})
+                    _, y, seq_length, all_score, transition = sess.run([model.train_op, model.input_y, seq_len, scores, transition_params], feed_dict={model.keep_prob: config.keep_prob})
                     for (score, length, y_) in zip(all_score, seq_length, y):
                         y_ = y_[:length]
                         viterbi_sequence, viterbi_score = tf.contrib.crf.viterbi_decode(score[:length], transition)
                         correct_labels += np.sum(np.equal(viterbi_sequence, y_))
                         total_labels += length
                     accuracy = 100.0 * correct_labels / float(total_labels)
-                    if train_batch % config.per_summary == 0:
-                        writer.add_summary(summary, epoch * (train_num // config.train_batch_size) + train_batch)
-                    if train_batch % config.per_print == 0:
-                        print("Epoch: {} Global Step: {} training loss: {} batch_accuracy: {:.2f}%".format(epoch, gStep, batch_loss, accuracy))
-                if epoch % config.per_test == 0:
-                    sess.run(model.test_Initializer)
-                    for test_batch in range(test_num // config.test_batch_size):
-                        correct_labels = 0
-                        total_labels = 0
-                        _, y, seq_length, all_score, transition = sess.run([model.train_op, input_y, seq_len, scores, transition_params], feed_dict={model.keep_prob: config.keep_prob})
-                        for (score, length, y_) in zip(all_score, seq_length, y):
-                            y_ = y_[:length]
-                            viterbi_sequence, viterbi_score = tf.contrib.crf.viterbi_decode(score[:length], transition)
-                            correct_labels += np.sum(np.equal(viterbi_sequence, y_))
-                            total_labels += length
-                        accuracy = 100.0 * correct_labels / float(total_labels)
-                        if test_batch % config.per_print == 0:
-                            print("Test Accuracy: {:.2f}% step: {}".format(accuracy, test_batch))
-                # 每 3 个 epoch 保存一次模型
-                if epoch % config.per_save == 0:
-                    saver.save(sess, config.model_save_path, global_step = model.gStep)
-        else:
-            # 加载模型
-            ckpt = tf.train.get_checkpoint_state(config.model_ckpt)
-            if ckpt and ckpt.model_checkpoint_path:
-                print("Load model: {}".format(ckpt.model_checkpoint_path))
-                # saver.restore(sess, ckpt.model_checkpoint_path)
-            test_data = reader(config.test_file, config.dict_file, True)
-            test_X, _ = test_data.get_batch(2)
-            print(test_X)
-            for word in test_X:
-                test_data.index_str(word)
+                    if test_batch % config.per_print == 0:
+                        print("Test Accuracy: {:.2f}% step: {}".format(accuracy, test_batch))
+            # 每 3 个 epoch 保存一次模型
+            if epoch % config.per_save == 0:
+                saver.save(sess, config.model_save_path, global_step = epoch)
+
+
+def predict():
+    # 加载模型进行预测
+    wordIndex = []
+
+    model = BiLSTM_CRF()
+    ckpt = tf.train.get_checkpoint_state(config.model_ckpt)
+
+    with open(config.predict_file, encoding='utf-8') as file:
+        line = file.readlines()
+        dataReader = reader(config.dict_file, input_dict = True)
+        num = 0
+        for sentence in line:
+            if num == 1:
+                break
+            sentence = sentence.strip()
+            tmp = dataReader.sentenceTowordIndex(sentence)
+            for element in tmp:
+                wordIndex.append(element)
+            num += 1
+    wordIndex = np.asarray(wordIndex, np.int32)
+    with tf.Session() as sess:
+        saver = tf.train.Saver()
+        seq_len, scores, transition_params = model.Build_model()
+        print(wordIndex)
+        if ckpt and ckpt.model_checkpoint_path:
+            print("Load model: {}".format(ckpt.model_checkpoint_path))
+            saver.restore(sess, ckpt.model_checkpoint_path)
+            sess.run(tf.global_variables_initializer())
+            _, seq_length, pred_scores, transition = sess.run([model.input_X, seq_len, scores, transition_params], feed_dict = {model.input_X : wordIndex})
+            for (score, length) in zip(pred_scores, seq_length):
+                viterbi_sequence, viterbi_score = tf.contrib.crf.viterbi_decode(score[:length], transition)
+                print(viterbi_sequence, viterbi_score)
+
 
 
 if __name__ == "__main__":
-    train()
+    predict()
