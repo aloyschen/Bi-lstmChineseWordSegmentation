@@ -24,6 +24,8 @@ class BiLSTM_CRF:
         self.test_data = reader(input_file = config.test_file, dict_file = config.dict_file, input_dict = True)
         self.input_y = tf.placeholder(dtype = tf.int32, shape = [None, None], name = 'label')
         self.input_X = tf.placeholder(dtype = tf.int32, shape = [None, None])
+        self.Build_model()
+
 
     def weight_variable(self, shape):
         """
@@ -84,8 +86,8 @@ class BiLSTM_CRF:
         """
         with tf.variable_scope("inputs"):
             # 求出batch_size中每个序列的长度, seq_length: [batch_size]
-            seq_length = tf.reduce_sum(tf.sign(self.input_X), 1)
-            seq_length = tf.cast(seq_length, tf.int32)
+            self.seq_length = tf.reduce_sum(tf.sign(self.input_X), 1)
+            self.seq_length = tf.cast(self.seq_length, tf.int32)
             embedding = tf.Variable(tf.random_normal([config.vocab_size, config.embedding_size]), dtype = tf.float32)
             weights_out = tf.Variable(tf.random_normal([2 * config.hidden_size, config.class_num]))
             bais_out = tf.Variable(tf.random_normal([config.class_num]))
@@ -93,13 +95,13 @@ class BiLSTM_CRF:
         with tf.variable_scope("biLSTM"):
             cell_fw = rnn.MultiRNNCell([self.LSTM_Cell() for _ in range(config.layer_num)], state_is_tuple=True)
             cell_bw = rnn.MultiRNNCell([self.LSTM_Cell() for _ in range(config.layer_num)], state_is_tuple=True)
-            bilstm_output, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, inputs = inputs, sequence_length = seq_length, dtype = tf.float32)
+            bilstm_output, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, inputs = inputs, sequence_length = self.seq_length, dtype = tf.float32)
             output = tf.reshape(tf.concat(bilstm_output, 2), [-1, config.hidden_size*2])
         logits = tf.matmul(output, weights_out) + bais_out
         # CRF模型
-        scores = tf.reshape(logits, [-1, config.time_step, config.class_num])
-        log_likelihood, transition_params = tf.contrib.crf.crf_log_likelihood(scores, self.input_y, seq_length)
-        self.loss = tf.reduce_mean(-log_likelihood)
+        self.scores = tf.reshape(logits, [-1, config.time_step, config.class_num])
+        self.log_likelihood, self.transition_params = tf.contrib.crf.crf_log_likelihood(self.scores, self.input_y, self.seq_length)
+        self.loss = tf.reduce_mean(-self.log_likelihood)
         # 如果使用softmax则需要对loss做mask
         # losses = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels = tf.reshape(train_y, [-1]), logits = scores))
         # mask = tf.sequence_mask(seq_length)
@@ -113,21 +115,17 @@ class BiLSTM_CRF:
         # correct_labels = tf.reduce_sum(tf.cast(tf.boolean_mask(tf.equal(input_y, viterbi_sequence), mask), tf.int32))
         # self.accuracy = tf.divide(correct_labels, total_labels)
         # tf.summary.scalar("accuracy", self.accuracy)
-        return seq_length, scores, transition_params
 
 
-def train():
+def train(model):
     """
     模型训练或者预测的主函数
     """
 
-    model = BiLSTM_CRF()
     model.load_data()
     train_num = model.train_data.sample_nums
     test_num = model.test_data.sample_nums
-    print(train_num)
     model.input_X, model.input_y = model.Iterrator.get_next()
-    seq_len, scores, transition_params = model.Build_model()
     saver = tf.train.Saver()
     with tf.Session(config = model.gpu_config) as sess:
         sess.run(tf.global_variables_initializer())
@@ -139,7 +137,7 @@ def train():
             for train_batch in range(train_num // config.train_batch_size):
                 correct_labels = 0
                 total_labels = 0
-                _, y, batch_loss, summary, gStep, seq_length, all_score, transition = sess.run([model.train_op, model.input_y, model.loss, merged, model.global_step, seq_len, scores, transition_params], feed_dict = {model.keep_prob : config.keep_prob})
+                _, y, batch_loss, summary, gStep, seq_length, all_score, transition = sess.run([model.train_op, model.input_y, model.loss, merged, model.global_step, model.seq_len, model.scores, model.transition_params], feed_dict = {model.keep_prob : config.keep_prob})
                 for (score, length, y_) in zip(all_score, seq_length, y):
                     y_ = y_[:length]
                     viterbi_sequence, viterbi_score = tf.contrib.crf.viterbi_decode(score[:length], transition)
@@ -155,7 +153,7 @@ def train():
                 for test_batch in range(test_num // config.test_batch_size):
                     correct_labels = 0
                     total_labels = 0
-                    _, y, seq_length, all_score, transition = sess.run([model.train_op, model.input_y, seq_len, scores, transition_params], feed_dict={model.keep_prob: config.keep_prob})
+                    _, y, seq_length, all_score, transition = sess.run([model.train_op, model.input_y, model.seq_len, model.scores, model.transition_params], feed_dict={model.keep_prob: config.keep_prob})
                     for (score, length, y_) in zip(all_score, seq_length, y):
                         y_ = y_[:length]
                         viterbi_sequence, viterbi_score = tf.contrib.crf.viterbi_decode(score[:length], transition)
@@ -169,16 +167,15 @@ def train():
                 saver.save(sess, config.model_save_path, global_step = epoch)
 
 
-def predict():
+
+def predict(model):
     # 加载模型进行预测
     wordIndex = []
-
-    model = BiLSTM_CRF()
     ckpt = tf.train.get_checkpoint_state(config.model_ckpt)
 
     with open(config.predict_file, encoding='utf-8') as file:
         line = file.readlines()
-        dataReader = reader(config.dict_file, input_dict = True)
+        dataReader = reader(dict_file=config.dict_file, input_dict = True)
         num = 0
         for sentence in line:
             if num == 1:
@@ -191,18 +188,19 @@ def predict():
     wordIndex = np.asarray(wordIndex, np.int32)
     with tf.Session() as sess:
         saver = tf.train.Saver()
-        seq_len, scores, transition_params = model.Build_model()
+        sess.run(tf.global_variables_initializer())
         print(wordIndex)
         if ckpt and ckpt.model_checkpoint_path:
             print("Load model: {}".format(ckpt.model_checkpoint_path))
             saver.restore(sess, ckpt.model_checkpoint_path)
-            sess.run(tf.global_variables_initializer())
-            _, seq_length, pred_scores, transition = sess.run([model.input_X, seq_len, scores, transition_params], feed_dict = {model.input_X : wordIndex})
+            x, seq_length, pred_scores, transition = sess.run([model.input_X, model.seq_length, model.scores, model.transition_params], feed_dict = {model.input_X : wordIndex})
             for (score, length) in zip(pred_scores, seq_length):
                 viterbi_sequence, viterbi_score = tf.contrib.crf.viterbi_decode(score[:length], transition)
+                print(length, score, x)
                 print(viterbi_sequence, viterbi_score)
 
 
 
 if __name__ == "__main__":
-    predict()
+    model = BiLSTM_CRF()
+    predict(model)

@@ -47,7 +47,7 @@ dict_file = './data/pku_training_dict.txt'
 # 模型保存路径
 model_save_path = './model_best/BiLSTM.ckpt'
 # 模型的ckpt文件路径
-model_ckpt = './model/'
+model_ckpt = './model_best/'
 # 使用GPU的型号
 GPU=0
 # 使用模型训练或者预测

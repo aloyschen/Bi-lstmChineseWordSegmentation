@@ -1,2 +1,6 @@
-model_checkpoint_path: "BiLSTMCRF.ckpt"
-all_model_checkpoint_paths: "BiLSTMCRF.ckpt"
+model_checkpoint_path: "BiLSTM.ckpt-8"
+all_model_checkpoint_paths: "BiLSTM.ckpt-0"
+all_model_checkpoint_paths: "BiLSTM.ckpt-2"
+all_model_checkpoint_paths: "BiLSTM.ckpt-4"
+all_model_checkpoint_paths: "BiLSTM.ckpt-6"
+all_model_checkpoint_paths: "BiLSTM.ckpt-8"
