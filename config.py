@@ -62,3 +62,5 @@ per_summary = 10
 per_save = 2
 # 迭代多少epoch用测试集验证
 per_test = 5
+# 部署tensorflow-servering的模型存储路径
+export_dir = './modelExport'

@@ -169,7 +169,18 @@ def train(model):
 
 
 def predict(model):
-    # 加载模型进行预测
+    """
+    Introduction
+    ------------
+        加载训练好的模型进行预测
+    Parameters
+    ----------
+        model: 模型结构
+    Returns
+    -------
+        None
+    """
+
     wordIndex = []
     ckpt = tf.train.get_checkpoint_state(config.model_ckpt)
 
@@ -200,7 +211,40 @@ def predict(model):
                 print(viterbi_sequence, viterbi_score)
 
 
+def exportModelProtobuf(model):
+    """
+    Introduction
+    ------------
+        将模型和预测变量存储为pb文件
+    Parameters
+    ----------
+        模型结构参数
+    """
+    builder = tf.saved_model.builder.SavedModelBuilder(config.export_dir)
+    # 定义输入输出
+    model_input = tf.saved_model.utils.build_tensor_info(model.input_X)
+    scores = tf.saved_model.utils.build_tensor_info(model.scores)
+    transition_params = tf.saved_model.utils.build_tensor_info(model.transition_params)
+    seq_length = tf.saved_model.utils.build_tensor_info(model.seq_length)
+    # 定义模型signature
+    signature_definition = tf.saved_model.signature_def_utils.build_signature_def(
+        inputs={'inputs': model_input},
+        outputs={'scores': scores,
+                 'transition_params' : transition_params,
+                 'seq_length' : seq_length},
+        method_name=tf.saved_model.signature_constants.PREDICT_METHOD_NAME)
+    saver = tf.train.Saver()
+    ckpt = tf.train.get_checkpoint_state(config.model_ckpt)
+    with tf.Session() as sess:
+        if ckpt and ckpt.model_checkpoint_path:
+            print("Load model: {}".format(ckpt.model_checkpoint_path))
+            saver.restore(sess, ckpt.model_checkpoint_path)
+            builder.add_meta_graph_and_variables(sess, [tf.saved_model.tag_constants.SERVING], signature_def_map={
+        tf.saved_model.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY: signature_definition})
+            builder.save()
+            print("Export model to {}".format(config.export_dir))
 
 if __name__ == "__main__":
     model = BiLSTM_CRF()
     predict(model)
+    exportModelProtobuf(model)
