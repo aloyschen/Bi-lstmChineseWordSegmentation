@@ -187,15 +187,11 @@ def predict(model):
     with open(config.predict_file, encoding='utf-8') as file:
         line = file.readlines()
         dataReader = reader(dict_file=config.dict_file, input_dict = True)
-        num = 0
         for sentence in line:
-            if num == 1:
-                break
             sentence = sentence.strip()
             tmp = dataReader.sentenceTowordIndex(sentence)
             for element in tmp:
                 wordIndex.append(element)
-            num += 1
     wordIndex = np.asarray(wordIndex, np.int32)
     with tf.Session() as sess:
         saver = tf.train.Saver()
