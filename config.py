@@ -29,7 +29,7 @@ vocab_size = 4686
 # vocab_size = 5152
 # embedding向量维度
 embedding_size = 64
-# Droupout保留概率
+# Dropout保留概率
 keep_prob = 0.5
 # 学习率
 lr = 0.001
@@ -44,12 +44,14 @@ test_file = './data/pku_test_gold.utf8'
 predict_file = './data/pku_test.utf8'
 # 词典输出文件
 dict_file = './data/pku_training_dict.txt'
+# 是否指定字典文件
+input_dict = False
 # 模型保存路径
 model_save_path = './model_best/BiLSTM.ckpt'
 # 模型的ckpt文件路径
 model_ckpt = './model_best/'
 # 使用GPU的型号
-GPU=0
+GPU='0'
 # 使用模型训练或者预测
 train=False
 # log输出路径
